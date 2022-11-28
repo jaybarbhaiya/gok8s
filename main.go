@@ -16,6 +16,9 @@ func main() {
 	config, err := clientcmd.BuildConfigFromFlags("", *kubeconfig)
 	if err != nil {
 		fmt.Printf("Error while Building config from Flags: %s", err.Error())
+
+		// the below code will be triggered with there is an error and will look for the InClusterConfig
+		// since the hardcoded path of the config file does not exist in the cluster
 		config, err = rest.InClusterConfig()
 		if err != nil {
 			fmt.Printf("Error in getting inClusterConfig: %s", err.Error())
