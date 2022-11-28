@@ -24,6 +24,7 @@ func main() {
 			fmt.Printf("Error in getting inClusterConfig: %s", err.Error())
 		}
 	}
+	// config.Timeout = 120 * time.Second
 
 	// clientset can be used to interactive with the k8s resources
 	clientset, err := kubernetes.NewForConfig(config)
@@ -37,6 +38,8 @@ func main() {
 	if err != nil {
 		fmt.Printf("Error listing pods from %s namespace: %s", namespace, err.Error())
 	}
+
+	// runtime.Object
 
 	fmt.Printf("Pods from %s Namespace:\n", namespace)
 	for _, pod := range pods.Items {
