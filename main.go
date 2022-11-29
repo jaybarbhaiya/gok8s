@@ -1,15 +1,15 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
-	"time"
+	"strings"
 
-	"k8s.io/apimachinery/pkg/util/wait"
-	"k8s.io/client-go/informers"
+	v1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
-	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/tools/clientcmd"
 )
 
@@ -34,25 +34,46 @@ func main() {
 		fmt.Printf("Error while creating the client set: %s", err.Error())
 	}
 
-	informerfactory := informers.NewSharedInformerFactory(clientset, 30*time.Second)
+	// get the pods in the default name space
+	ctx := context.Background()
+	namespace := "default"
 
-	podinformer := informerfactory.Core().V1().Pods()
-	podinformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
-		AddFunc: func(new interface{}) {
-			fmt.Println("Add Event Handler was called")
-		},
-		UpdateFunc: func(old, new interface{}) {
-			fmt.Println("Update Event handler was called")
-		},
-		DeleteFunc: func(obj interface{}) {
-			fmt.Println("Delete event handler was called")
-		},
-	})
-	informerfactory.Start(wait.NeverStop)
-	informerfactory.WaitForCacheSync(wait.NeverStop)
-	pod, err := podinformer.Lister().Pods("default").Get("gok8s-8fb98cf87-76wgk")
-	if err != nil {
-		fmt.Printf("PodInformer error: %s", err)
+	podsClient := clientset.CoreV1().Pods(namespace)
+	// pod, err := podsClient.Get(ctx, "gok8s-8fb98cf87-swctq", metav1.GetOptions{})
+	// if err != nil {
+	// 	fmt.Printf("Failed to get pod: %s", err.Error())
+	// }
+	// fmt.Printf("pod type: %T\n", pod)
+
+	podList, podListErr := podsClient.List(ctx, metav1.ListOptions{})
+	if podListErr != nil {
+		fmt.Printf("Failed to get PodList: %s", podListErr.Error())
 	}
-	fmt.Println(pod)
+
+	var pod v1.Pod
+
+	for _, podItem := range podList.Items {
+		if strings.Contains(podItem.Name, "gok8s") {
+			pod = podItem
+		}
+	}
+
+	if pod.Name == "" {
+		panic("Relevant Pod not found in the podList")
+	}
+	fmt.Printf("Relevant Pod found: %s", pod.Name)
+
+	if pod.ObjectMeta.Labels["jblabel"] != "jblabelvalue" {
+		pod.ObjectMeta.Labels["jblabel"] = "jblabelvalue"
+	}
+
+	_, updateErr := podsClient.Update(ctx, &pod, metav1.UpdateOptions{})
+	if updateErr != nil {
+		fmt.Printf("Failed to update pod: %s", updateErr.Error())
+	}
+
+	for labelKey, labelValue := range pod.ObjectMeta.Labels {
+		fmt.Printf("%v: %v\n", labelKey, labelValue)
+	}
+
 }
