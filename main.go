@@ -1,13 +1,15 @@
 package main
 
 import (
-	"context"
 	"flag"
 	"fmt"
+	"time"
 
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/wait"
+	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
+	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/tools/clientcmd"
 )
 
@@ -32,26 +34,25 @@ func main() {
 		fmt.Printf("Error while creating the client set: %s", err.Error())
 	}
 
-	ctx := context.Background()
-	namespace := "default"
-	pods, err := clientset.CoreV1().Pods(namespace).List(ctx, metav1.ListOptions{})
+	informerfactory := informers.NewSharedInformerFactory(clientset, 30*time.Second)
+
+	podinformer := informerfactory.Core().V1().Pods()
+	podinformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
+		AddFunc: func(new interface{}) {
+			fmt.Println("Add Event Handler was called")
+		},
+		UpdateFunc: func(old, new interface{}) {
+			fmt.Println("Update Event handler was called")
+		},
+		DeleteFunc: func(obj interface{}) {
+			fmt.Println("Delete event handler was called")
+		},
+	})
+	informerfactory.Start(wait.NeverStop)
+	informerfactory.WaitForCacheSync(wait.NeverStop)
+	pod, err := podinformer.Lister().Pods("default").Get("gok8s-8fb98cf87-76wgk")
 	if err != nil {
-		fmt.Printf("Error listing pods from %s namespace: %s", namespace, err.Error())
+		fmt.Printf("PodInformer error: %s", err)
 	}
-
-	// runtime.Object
-
-	fmt.Printf("Pods from %s Namespace:\n", namespace)
-	for _, pod := range pods.Items {
-		fmt.Printf("%s\n", pod.Name)
-	}
-
-	deployments, err := clientset.AppsV1().Deployments(namespace).List(ctx, metav1.ListOptions{})
-	if err != nil {
-		fmt.Printf("Error listing desployments from %s namespace: %s", namespace, err.Error())
-	}
-	fmt.Printf("Deployments from %s Namespace:\n", namespace)
-	for _, deployment := range deployments.Items {
-		fmt.Printf("%s\n", deployment.Name)
-	}
+	fmt.Println(pod)
 }
